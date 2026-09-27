@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+content="width=device-width, initial-scale=1.0">
+
+<title>Stock QR Scanner</title>
+
+<!-- QR Scanner Library -->
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<style>
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Arial,
+    sans-serif;
+
+  background: #eef2f9;
+
+  color: #16233f;
+}
+
+.container {
+  max-width: 480px;
+
+  min-height: 100vh;
+
+  margin: auto;
+
+  padding: 24px 16px;
+}
+
+h1 {
+  text-align: center;
+
+  margin: 10px 0 20px;
+
+  font-size: 24px;
+}
+
+.scanner {
+  background: #000;
+
+  border-radius: 16px;
+
+  overflow: hidden;
+}
+
+#reader {
+  width: 100%;
+}
+
+#reader video {
+  width: 100% !important;
+}
+
+.status {
+  margin-top: 15px;
+
+  text-align: center;
+
+  font-size: 14px;
+
+  color: #66738f;
+
+  min-height: 22px;
+}
+
+.result {
+  margin-top: 20px;
+
+  background: #fff;
+
+  border-radius: 16px;
+
+  padding: 18px;
+
+  text-align: center;
+}
+
+.result-title {
+  font-size: 14px;
+
+  color: #66738f;
+}
+
+.vin {
+  margin-top: 8px;
+
+  font-size: 20px;
+
+  font-weight: 700;
+
+  word-break: break-all;
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+<div class="container">
+
+  <h1>Scan QR</h1>
+
+  <div class="scanner">
+
+    <div id="reader"></div>
+
+  </div>
+
+  <div class="status" id="status">
+
+    กำลังเตรียมกล้อง...
+
+  </div>
+
+  <div class="result">
+
+    <div class="result-title">
+
+      VIN ที่อ่านได้
+
+    </div>
+
+    <div class="vin" id="vin">
+
+      -
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+/*
+ * =========================================================
+ * CONFIGURATION
+ * =========================================================
+ */
+
+const APP_URL =
+"https://script.google.com/a/macros/tripetch-isuzu.co.th/s/AKfycbyPUawbWLA-U63oO6ifxn42rkfdgePQaOj6oYJwz_jKApQMjqTHdG4_HNkVKwus0xE_DQ/exec";
+
+
+let scanner = null;
+
+let scanCompleted = false;
+
+
+/*
+ * =========================================================
+ * VIN CLEAN / EXTRACT
+ * =========================================================
+ *
+ * QR บางอันอาจไม่ได้ส่งมาเป็น VIN เพียว ๆ
+ *
+ * ตัวอย่าง:
+ *
+ * MP1FRR90HRT000259
+ *
+ * MP1 FRR90HRT000259
+ *
+ * VIN: MP1FRR90HRT000259
+ *
+ * https://xxxxx/MP1FRR90HRT000259
+ *
+ * Function นี้จะพยายามดึง VIN 17 ตัวออกมา
+ *
+ * =========================================================
+ */
+
+function extractVin(text) {
+
+  const raw =
+    String(text || '')
+      .toUpperCase()
+      .trim();
+
+
+  /*
+   * ลบ whitespace ทุกตำแหน่ง
+   *
+   * เช่น
+   *
+   * MP1 FRR90 HRT000259
+   *
+   * จะกลายเป็น
+   *
+   * MP1FRR90HRT000259
+   */
+
+  const cleaned =
+    raw.replace(/\s+/g, '');
+
+
+  /*
+   * VIN ปกติควรมี 17 characters
+   *
+   * VIN ไม่ใช้ I, O, Q
+   */
+
+  if (
+    /^[A-HJ-NPR-Z0-9]{17}$/.test(cleaned)
+  ) {
+
+    return cleaned;
+
+  }
+
+
+  /*
+   * ถ้า QR มีข้อความอื่นปนมา
+   *
+   * เช่น
+   *
+   * VIN: MP1FRR90HRT000259
+   *
+   * ให้ค้นหา VIN 17 ตัวที่อยู่ภายในข้อความ
+   */
+
+  const match =
+    raw.match(
+      /[A-HJ-NPR-Z0-9]{17}/
+    );
+
+
+  if (match) {
+
+    return match[0];
+
+  }
+
+
+  /*
+   * ถ้าหา VIN 17 ตัวไม่ได้
+   * ส่งค่าที่ clean แล้วกลับไป
+   */
+
+  return cleaned;
+
+}
+
+
+/*
+ * =========================================================
+ * START CAMERA
+ * =========================================================
+ */
+
+function startScanner() {
+
+  scanner =
+    new Html5Qrcode("reader");
+
+
+  const config = {
+
+    fps: 10,
+
+    qrbox: {
+
+      width: 250,
+
+      height: 250
+
+    }
+
+  };
+
+
+  scanner.start(
+
+    {
+
+      facingMode: "environment"
+
+    },
+
+    config,
+
+
+    function(decodedText) {
+
+
+      /*
+       * ป้องกัน QR เดิมถูกอ่านซ้ำหลายครั้ง
+       */
+
+      if (scanCompleted) {
+
+        return;
+
+      }
+
+
+      scanCompleted = true;
+
+
+      /*
+       * =====================================================
+       * IMPORTANT
+       * =====================================================
+       *
+       * ใช้ extractVin()
+       * แทน decodedText.trim()
+       *
+       */
+
+      const vin =
+        extractVin(decodedText);
+
+
+      /*
+       * Debug information
+       *
+       * เปิด Console ใน Browser
+       * จะเห็นค่าที่ QR อ่านจริง
+       */
+
+      console.log(
+        "QR original:",
+        decodedText
+      );
+
+      console.log(
+        "VIN extracted:",
+        vin
+      );
+
+
+      /*
+       * แสดง VIN บนหน้า Scanner
+       */
+
+      document.getElementById("vin").textContent =
+        vin;
+
+
+      document.getElementById("status").textContent =
+        "อ่าน QR สำเร็จ — กำลังค้นหาข้อมูลรถ...";
+
+
+      /*
+       * =====================================================
+       * STOP CAMERA FIRST
+       * =====================================================
+       */
+
+      stopScanner();
+
+
+      /*
+       * =====================================================
+       * BUILD APPS SCRIPT URL
+       * =====================================================
+       *
+       * Example:
+       *
+       * /exec?vin=MP1TFR41JTG032628
+       *
+       */
+
+      const targetUrl =
+        APP_URL +
+        "?vin=" +
+        encodeURIComponent(vin);
+      
+      console.log("================================");
+      console.log("QR ORIGINAL:", decodedText);
+      console.log("VIN EXTRACTED:", vin);
+      console.log("VIN LENGTH:", vin.length);
+      console.log("VIN CHAR CODES:", [...vin].map(c => c.charCodeAt(0)));
+      console.log("TARGET URL:", targetUrl);
+      console.log("================================");
+      
+      
+      document.getElementById("status").textContent =
+        "อ่าน QR สำเร็จ — กำลังค้นหาข้อมูลรถ...";
+      
+      
+      document.getElementById("vin").textContent =
+        vin;
+      
+      
+      // กลับไปยัง Stock Checking App
+      setTimeout(function() {
+      
+        window.location.href =
+          targetUrl;
+      
+      }, 500);
+
+    },
+
+
+    function(errorMessage) {
+
+      /*
+       * QR not detected yet.
+       *
+       * Do not display this repeatedly.
+       */
+
+    }
+
+  )
+
+  .then(function() {
+
+    document.getElementById("status").textContent =
+      "กล้องพร้อมใช้งาน — เล็งไปที่ QR";
+
+  })
+
+  .catch(function(error) {
+
+    console.error(
+      "Camera start failed:",
+      error
+    );
+
+
+    document.getElementById("status").textContent =
+      "เปิดกล้องไม่สำเร็จ";
+
+  });
+
+}
+
+
+/*
+ * =========================================================
+ * STOP CAMERA
+ * =========================================================
+ */
+
+function stopScanner() {
+
+  if (!scanner) {
+
+    return;
+
+  }
+
+
+  scanner
+    .stop()
+
+    .then(function() {
+
+      scanner.clear();
+
+    })
+
+    .catch(function(error) {
+
+      console.error(
+        "Scanner stop error:",
+        error
+      );
+
+    });
+
+}
+
+
+/*
+ * =========================================================
+ * START WHEN PAGE LOADS
+ * =========================================================
+ */
+
+window.addEventListener(
+
+  "load",
+
+  function() {
+
+    startScanner();
+
+  }
+
+);
+
+</script>
+
+</body>
+
+</html>

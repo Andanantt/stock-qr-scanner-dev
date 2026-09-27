@@ -1,1 +1,0 @@
-# stock-qr-scanner-dev
