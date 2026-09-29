@@ -159,9 +159,11 @@ h1 {
  * =========================================================
  */
 
-const APP_URL =
-"https://script.google.com/a/macros/tripetch-isuzu.co.th/s/AKfycbyPUawbWLA-U63oO6ifxn42rkfdgePQaOj6oYJwz_jKApQMjqTHdG4_HNkVKwus0xE_DQ/exec";
+const params = new URLSearchParams(window.location.search);
 
+const APP_URL =
+  params.get('returnUrl') ||
+  'https://script.google.com/a/macros/tripetch-isuzu.co.th/s/AKfycbyPUawbWLA-U63oO6ifxn42rkfdgePQaOj6oYJwz_jKApQMjqTHdG4_HNkVKwus0xE_DQ/exec';
 
 let scanner = null;
 
@@ -381,10 +383,14 @@ function startScanner() {
        *
        */
 
-      const targetUrl =
-        APP_URL +
-        "?vin=" +
-        encodeURIComponent(vin);
+    const separator =
+      APP_URL.includes('?') ? '&' : '?';
+    
+    const targetUrl =
+      APP_URL +
+      separator +
+      'vin=' +
+      encodeURIComponent(vin);
       
       console.log("================================");
       console.log("QR ORIGINAL:", decodedText);
