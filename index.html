@@ -227,7 +227,7 @@ const APP_URL =
   
             scanner.clear();
   
-            window.location.href = APP_URL;
+            window.history.back();
   
           })
           .catch(function(error) {
@@ -238,17 +238,17 @@ const APP_URL =
             );
   
             /*
-             * Even if camera stop fails,
-             * still return to the main app.
+             * If camera stop fails,
+             * still go back to the previous page.
              */
   
-            window.location.href = APP_URL;
+            window.history.back();
   
           });
   
       } else {
   
-        window.location.href = APP_URL;
+        window.history.back();
   
       }
   
