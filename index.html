@@ -211,49 +211,69 @@ const APP_URL =
    * =========================================================
    */
   
-  document.getElementById("btnBack").addEventListener(
-    "click",
-    function() {
-  
-      /*
-       * Stop camera before leaving the scanner page
-       */
-  
-      if (scanner) {
-  
-        scanner
-          .stop()
-          .then(function() {
-  
-            scanner.clear();
-  
-            window.history.back();
-  
-          })
-          .catch(function(error) {
-  
-            console.error(
-              "Scanner stop error:",
-              error
-            );
-  
-            /*
-             * If camera stop fails,
-             * still go back to the previous page.
-             */
-  
-            window.history.back();
-  
-          });
-  
-      } else {
-  
-        window.history.back();
-  
+    document.getElementById("btnBack").addEventListener(
+      "click",
+      function() {
+    
+        /*
+         * Stop camera before leaving scanner page
+         */
+    
+        function goBackToScanPage() {
+    
+          const separator =
+            APP_URL.includes('?') ? '&' : '?';
+    
+          const scanPageUrl =
+            APP_URL +
+            separator +
+            'screen=scan';
+    
+          console.log(
+            "Back to Stock Checking App:",
+            scanPageUrl
+          );
+    
+          window.location.href =
+            scanPageUrl;
+        }
+    
+    
+        if (scanner) {
+    
+          scanner
+            .stop()
+            .then(function() {
+    
+              scanner.clear();
+    
+              goBackToScanPage();
+    
+            })
+            .catch(function(error) {
+    
+              console.error(
+                "Scanner stop error:",
+                error
+              );
+    
+              /*
+               * Even if camera stop fails,
+               * still return to Scan QR page.
+               */
+    
+              goBackToScanPage();
+    
+            });
+    
+        } else {
+    
+          goBackToScanPage();
+    
+        }
+    
       }
-  
-    }
-  );
+    );
 
 
 /*
