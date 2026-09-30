@@ -53,6 +53,28 @@ h1 {
   font-size: 24px;
 }
 
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  border: none;
+  background: transparent;
+
+  color: #2f6fed;
+
+  font-size: 16px;
+  font-weight: 600;
+
+  padding: 6px 0;
+
+  cursor: pointer;
+}
+
+.back-btn:active {
+  opacity: 0.6;
+}  
+
 .scanner {
   background: #000;
 
@@ -109,14 +131,27 @@ h1 {
   word-break: break-all;
 }
 
+
+  
 </style>
 
+
+
+
+  
 </head>
 
 
 <body>
 
 <div class="container">
+
+  <button
+    type="button"
+    class="back-btn"
+    id="btnBack">
+    ← กลับ
+  </button>
 
   <h1>Scan QR</h1>
 
@@ -165,9 +200,60 @@ const APP_URL =
   params.get('returnUrl') ||
   'https://script.google.com/a/macros/tripetch-isuzu.co.th/s/AKfycbyPUawbWLA-U63oO6ifxn42rkfdgePQaOj6oYJwz_jKApQMjqTHdG4_HNkVKwus0xE_DQ/exec';
 
-let scanner = null;
-
-let scanCompleted = false;
+  let scanner = null;
+  
+  let scanCompleted = false;
+  
+  
+  /*
+   * =========================================================
+   * BACK TO STOCK CHECKING APP
+   * =========================================================
+   */
+  
+  document.getElementById("btnBack").addEventListener(
+    "click",
+    function() {
+  
+      /*
+       * Stop camera before leaving the scanner page
+       */
+  
+      if (scanner) {
+  
+        scanner
+          .stop()
+          .then(function() {
+  
+            scanner.clear();
+  
+            window.location.href = APP_URL;
+  
+          })
+          .catch(function(error) {
+  
+            console.error(
+              "Scanner stop error:",
+              error
+            );
+  
+            /*
+             * Even if camera stop fails,
+             * still return to the main app.
+             */
+  
+            window.location.href = APP_URL;
+  
+          });
+  
+      } else {
+  
+        window.location.href = APP_URL;
+  
+      }
+  
+    }
+  );
 
 
 /*
