@@ -10,6 +10,15 @@ content="width=device-width, initial-scale=1.0">
 
 <title>Stock QR Scanner</title>
 
+<!--
+  SPEED V2:
+  เปิดการเชื่อมต่อไปยัง server ของ Apps Script ล่วงหน้า
+  ตอนส่ง VIN กลับไปจะได้ไม่ต้องรอเชื่อมต่อใหม่
+-->
+<link rel="preconnect" href="https://script.google.com">
+<link rel="preconnect" href="https://script.googleusercontent.com">
+<link rel="dns-prefetch" href="https://script.google.com">
+
 <!-- QR Scanner Library -->
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
@@ -73,7 +82,7 @@ h1 {
 
 .back-btn:active {
   opacity: 0.6;
-}  
+}
 
 .scanner {
   background: #000;
@@ -131,14 +140,8 @@ h1 {
   word-break: break-all;
 }
 
-
-  
 </style>
 
-
-
-
-  
 </head>
 
 
@@ -190,6 +193,29 @@ h1 {
 
 /*
  * =========================================================
+ * Stock QR Scanner — SPEED V2
+ * =========================================================
+ *
+ * สิ่งที่ปรับให้เร็วขึ้น:
+ *
+ * 1. อ่านเฉพาะ QR Code (เดิมไลบรารีลองถอดทุกชนิดบาร์โค้ด
+ *    ~15 แบบในทุกเฟรม ทำให้อ่านช้ามาก)
+ * 2. ใช้ตัวอ่าน QR ที่มากับเบราว์เซอร์ (BarcodeDetector)
+ *    ถ้าเครื่องรองรับ — เร็วกว่ามากบน Android/Chrome
+ * 3. สแกน 20 ครั้ง/วินาที (เดิม 10) และไม่สแกนภาพกลับด้าน
+ * 4. กรอบสแกนปรับตามขนาดจอ + ขอกล้องความละเอียดสูง
+ *    และโฟกัสอัตโนมัติต่อเนื่อง (อ่าน QR เล็ก/ไกลได้ดีขึ้น)
+ * 5. อ่านได้แล้วส่งกลับแอปทันที (เดิมรอ 0.5 วินาที)
+ * 6. เปิดกล้องทันทีที่หน้าพร้อม ไม่ต้องรอรูป/ฟอนต์โหลดครบ
+ *
+ * ลิงก์ที่ส่งกลับแอปยังเหมือนเดิม:
+ *   .../exec?vin=XXXXXXXXXXXXXXXXX
+ *   .../exec?screen=scan   (ปุ่มกลับ)
+ */
+
+
+/*
+ * =========================================================
  * CONFIGURATION
  * =========================================================
  */
@@ -200,80 +226,45 @@ const APP_URL =
   params.get('returnUrl') ||
   'https://script.google.com/a/macros/tripetch-isuzu.co.th/s/AKfycbyPUawbWLA-U63oO6ifxn42rkfdgePQaOj6oYJwz_jKApQMjqTHdG4_HNkVKwus0xE_DQ/exec';
 
-  let scanner = null;
-  
-  let scanCompleted = false;
-  
-  
-  /*
-   * =========================================================
-   * BACK TO STOCK CHECKING APP
-   * =========================================================
-   */
-  
-    document.getElementById("btnBack").addEventListener(
-      "click",
-      function() {
-    
-        /*
-         * Stop camera before leaving scanner page
-         */
-    
-        function goBackToScanPage() {
-    
-          const separator =
-            APP_URL.includes('?') ? '&' : '?';
-    
-          const scanPageUrl =
-            APP_URL +
-            separator +
-            'screen=scan';
-    
-          console.log(
-            "Back to Stock Checking App:",
-            scanPageUrl
-          );
-    
-          window.location.href =
-            scanPageUrl;
-        }
-    
-    
-        if (scanner) {
-    
-          scanner
-            .stop()
-            .then(function() {
-    
-              scanner.clear();
-    
-              goBackToScanPage();
-    
-            })
-            .catch(function(error) {
-    
-              console.error(
-                "Scanner stop error:",
-                error
-              );
-    
-              /*
-               * Even if camera stop fails,
-               * still return to Scan QR page.
-               */
-    
-              goBackToScanPage();
-    
-            });
-    
-        } else {
-    
-          goBackToScanPage();
-    
-        }
-    
-      }
+let scanner = null;
+
+let scanCompleted = false;
+
+const statusEl = document.getElementById("status");
+const vinEl = document.getElementById("vin");
+
+
+function buildAppUrl(extraParam) {
+
+  const separator =
+    APP_URL.includes('?') ? '&' : '?';
+
+  return APP_URL + separator + extraParam;
+}
+
+
+/*
+ * =========================================================
+ * BACK TO STOCK CHECKING APP
+ * =========================================================
+ *
+ * ไม่ต้องรอปิดกล้องให้เสร็จก่อน —
+ * เมื่อเปลี่ยนหน้า เบราว์เซอร์จะปิดกล้องให้เอง
+ */
+
+document.getElementById("btnBack").addEventListener(
+  "click",
+  function() {
+
+    try {
+      if (scanner) scanner.stop().catch(function() {});
+    } catch (e) {}
+
+    window.location.replace(
+      buildAppUrl('screen=scan')
     );
+  }
+);
 
 
 /*
@@ -284,17 +275,12 @@ const APP_URL =
  * QR บางอันอาจไม่ได้ส่งมาเป็น VIN เพียว ๆ
  *
  * ตัวอย่าง:
- *
- * MP1FRR90HRT000259
- *
- * MP1 FRR90HRT000259
- *
- * VIN: MP1FRR90HRT000259
- *
- * https://xxxxx/MP1FRR90HRT000259
+ *   MP1FRR90HRT000259
+ *   MP1 FRR90HRT000259
+ *   VIN: MP1FRR90HRT000259
+ *   https://xxxxx/MP1FRR90HRT000259
  *
  * Function นี้จะพยายามดึง VIN 17 ตัวออกมา
- *
  * =========================================================
  */
 
@@ -305,68 +291,66 @@ function extractVin(text) {
       .toUpperCase()
       .trim();
 
-
-  /*
-   * ลบ whitespace ทุกตำแหน่ง
-   *
-   * เช่น
-   *
-   * MP1 FRR90 HRT000259
-   *
-   * จะกลายเป็น
-   *
-   * MP1FRR90HRT000259
-   */
-
+  // ลบ whitespace ทุกตำแหน่ง
   const cleaned =
     raw.replace(/\s+/g, '');
 
-
-  /*
-   * VIN ปกติควรมี 17 characters
-   *
-   * VIN ไม่ใช้ I, O, Q
-   */
-
-  if (
-    /^[A-HJ-NPR-Z0-9]{17}$/.test(cleaned)
-  ) {
-
+  // VIN ปกติ 17 ตัว และไม่ใช้ I, O, Q
+  if (/^[A-HJ-NPR-Z0-9]{17}$/.test(cleaned)) {
     return cleaned;
-
   }
 
-
-  /*
-   * ถ้า QR มีข้อความอื่นปนมา
-   *
-   * เช่น
-   *
-   * VIN: MP1FRR90HRT000259
-   *
-   * ให้ค้นหา VIN 17 ตัวที่อยู่ภายในข้อความ
-   */
-
+  // ถ้ามีข้อความอื่นปนมา ให้หา VIN 17 ตัวข้างใน
   const match =
-    raw.match(
-      /[A-HJ-NPR-Z0-9]{17}/
-    );
-
+    raw.match(/[A-HJ-NPR-Z0-9]{17}/);
 
   if (match) {
-
     return match[0];
-
   }
 
-
-  /*
-   * ถ้าหา VIN 17 ตัวไม่ได้
-   * ส่งค่าที่ clean แล้วกลับไป
-   */
-
+  // หา VIN 17 ตัวไม่ได้ → ส่งค่าที่ clean แล้วกลับไป
   return cleaned;
+}
 
+
+/*
+ * =========================================================
+ * ON QR READ
+ * =========================================================
+ */
+
+function onScanSuccess(decodedText) {
+
+  // ป้องกัน QR เดิมถูกอ่านซ้ำหลายครั้ง
+  if (scanCompleted) {
+    return;
+  }
+
+  scanCompleted = true;
+
+  const vin =
+    extractVin(decodedText);
+
+  const targetUrl =
+    buildAppUrl('vin=' + encodeURIComponent(vin));
+
+  // แสดงผลและสั่นเบา ๆ ให้รู้ว่าอ่านได้แล้ว
+  vinEl.textContent = vin;
+  statusEl.textContent = "อ่าน QR สำเร็จ — กำลังเปิดข้อมูลรถ...";
+
+  try {
+    if (navigator.vibrate) navigator.vibrate(60);
+  } catch (e) {}
+
+  console.log("QR ORIGINAL:", decodedText, "| VIN:", vin, "| URL:", targetUrl);
+
+  // ปิดกล้องแบบไม่ต้องรอ แล้วไปแอปทันที
+  // (replace = กดย้อนกลับในเบราว์เซอร์จะไม่วนกลับมาหน้ากล้องที่อ่านเสร็จแล้ว)
+  try {
+    if (scanner) scanner.stop().catch(function() {});
+  } catch (e) {}
+
+  window.location.replace(targetUrl);
 }
 
 
@@ -378,242 +362,131 @@ function extractVin(text) {
 
 function startScanner() {
 
+  if (typeof Html5Qrcode === 'undefined') {
+    statusEl.textContent = "โหลดตัวสแกนไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่";
+    return;
+  }
+
   scanner =
-    new Html5Qrcode("reader");
+    new Html5Qrcode("reader", {
+
+      // อ่านเฉพาะ QR Code → เร็วกว่าลองทุกชนิดบาร์โค้ดหลายเท่า
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.QR_CODE
+      ],
+
+      // ใช้ตัวอ่าน QR ในตัวของเบราว์เซอร์ถ้ามี (Chrome/Android)
+      experimentalFeatures: {
+        useBarCodeDetectorIfSupported: true
+      },
+
+      verbose: false
+    });
 
 
   const config = {
 
-    fps: 10,
+    // สแกน 20 ครั้งต่อวินาที (เดิม 10)
+    fps: 20,
 
-    qrbox: {
+    // กรอบสแกน = 75% ของด้านที่สั้นกว่า (ปรับตามขนาดจอ)
+    qrbox: function(viewfinderWidth, viewfinderHeight) {
+      const size = Math.floor(
+        Math.min(viewfinderWidth, viewfinderHeight) * 0.75
+      );
+      return {
+        width: Math.max(size, 200),
+        height: Math.max(size, 200)
+      };
+    },
 
-      width: 250,
+    // ไม่ต้องลองอ่านภาพกลับด้าน (QR บนรถไม่กลับด้าน) → ลดงานลงครึ่งหนึ่ง
+    disableFlip: true,
 
-      height: 250
-
+    // ขอกล้องหลัง ความละเอียดสูง + โฟกัสต่อเนื่อง
+    // (ถ้าเครื่องไม่รองรับ ค่าพวกนี้จะถูกข้ามไปเอง)
+    videoConstraints: {
+      facingMode: "environment",
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      advanced: [
+        { focusMode: "continuous" }
+      ]
     }
-
   };
 
 
-  scanner.start(
-
-    {
-
-      facingMode: "environment"
-
-    },
-
-    config,
-
-
-    function(decodedText) {
-
-
-      /*
-       * ป้องกัน QR เดิมถูกอ่านซ้ำหลายครั้ง
-       */
-
-      if (scanCompleted) {
-
-        return;
-
-      }
-
-
-      scanCompleted = true;
-
-
-      /*
-       * =====================================================
-       * IMPORTANT
-       * =====================================================
-       *
-       * ใช้ extractVin()
-       * แทน decodedText.trim()
-       *
-       */
-
-      const vin =
-        extractVin(decodedText);
-
-
-      /*
-       * Debug information
-       *
-       * เปิด Console ใน Browser
-       * จะเห็นค่าที่ QR อ่านจริง
-       */
-
-      console.log(
-        "QR original:",
-        decodedText
-      );
-
-      console.log(
-        "VIN extracted:",
-        vin
-      );
-
-
-      /*
-       * แสดง VIN บนหน้า Scanner
-       */
-
-      document.getElementById("vin").textContent =
-        vin;
-
-
-      document.getElementById("status").textContent =
-        "อ่าน QR สำเร็จ — กำลังค้นหาข้อมูลรถ...";
-
-
-      /*
-       * =====================================================
-       * STOP CAMERA FIRST
-       * =====================================================
-       */
-
-      stopScanner();
-
-
-      /*
-       * =====================================================
-       * BUILD APPS SCRIPT URL
-       * =====================================================
-       *
-       * Example:
-       *
-       * /exec?vin=MP1TFR41JTG032628
-       *
-       */
-
-    const separator =
-      APP_URL.includes('?') ? '&' : '?';
-    
-    const targetUrl =
-      APP_URL +
-      separator +
-      'vin=' +
-      encodeURIComponent(vin);
-      
-      console.log("================================");
-      console.log("QR ORIGINAL:", decodedText);
-      console.log("VIN EXTRACTED:", vin);
-      console.log("VIN LENGTH:", vin.length);
-      console.log("VIN CHAR CODES:", [...vin].map(c => c.charCodeAt(0)));
-      console.log("TARGET URL:", targetUrl);
-      console.log("================================");
-      
-      
-      document.getElementById("status").textContent =
-        "อ่าน QR สำเร็จ — กำลังค้นหาข้อมูลรถ...";
-      
-      
-      document.getElementById("vin").textContent =
-        vin;
-      
-      
-      // กลับไปยัง Stock Checking App
-      setTimeout(function() {
-      
-        window.location.href =
-          targetUrl;
-      
-      }, 500);
-
-    },
-
-
-    function(errorMessage) {
-
-      /*
-       * QR not detected yet.
-       *
-       * Do not display this repeatedly.
-       */
-
-    }
-
-  )
-
-  .then(function() {
-
-    document.getElementById("status").textContent =
-      "กล้องพร้อมใช้งาน — เล็งไปที่ QR";
-
-  })
-
-  .catch(function(error) {
-
-    console.error(
-      "Camera start failed:",
-      error
-    );
-
-
-    document.getElementById("status").textContent =
-      "เปิดกล้องไม่สำเร็จ";
-
-  });
-
-}
-
-
-/*
- * =========================================================
- * STOP CAMERA
- * =========================================================
- */
-
-function stopScanner() {
-
-  if (!scanner) {
-
-    return;
-
-  }
-
-
   scanner
-    .stop()
-
+    .start(
+      { facingMode: "environment" },
+      config,
+      onScanSuccess,
+      function() {
+        // ยังไม่เจอ QR ในเฟรมนี้ — ไม่ต้องแสดงอะไร
+      }
+    )
     .then(function() {
-
-      scanner.clear();
-
+      statusEl.textContent = "กล้องพร้อมใช้งาน — เล็งไปที่ QR";
     })
-
     .catch(function(error) {
 
-      console.error(
-        "Scanner stop error:",
-        error
-      );
+      console.error("Camera start failed:", error);
 
+      // บางเครื่องไม่รับค่าความละเอียด/โฟกัสที่ขอ → ลองใหม่แบบพื้นฐาน
+      startScannerBasic();
     });
+}
 
+
+/*
+ * เปิดกล้องแบบพื้นฐาน (ใช้เมื่อเครื่องไม่รองรับค่าที่ขอด้านบน)
+ */
+function startScannerBasic() {
+
+  const basicConfig = {
+    fps: 20,
+    qrbox: { width: 250, height: 250 },
+    disableFlip: true
+  };
+
+  try {
+
+    scanner
+      .start(
+        { facingMode: "environment" },
+        basicConfig,
+        onScanSuccess,
+        function() {}
+      )
+      .then(function() {
+        statusEl.textContent = "กล้องพร้อมใช้งาน — เล็งไปที่ QR";
+      })
+      .catch(function(error) {
+        console.error("Camera start failed (basic):", error);
+        statusEl.textContent = "เปิดกล้องไม่สำเร็จ — ตรวจสอบสิทธิ์การใช้กล้องของเบราว์เซอร์";
+      });
+
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = "เปิดกล้องไม่สำเร็จ";
+  }
 }
 
 
 /*
  * =========================================================
- * START WHEN PAGE LOADS
+ * START AS SOON AS THE PAGE IS READY
  * =========================================================
+ *
+ * เดิมรอ "load" (ต้องโหลดทุกอย่างครบ)
+ * ตอนนี้เริ่มทันทีเมื่อ HTML พร้อม
  */
 
-window.addEventListener(
-
-  "load",
-
-  function() {
-
-    startScanner();
-
-  }
-
-);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", startScanner);
+} else {
+  startScanner();
+}
 
 </script>
 
