@@ -6,21 +6,34 @@
 <meta charset="UTF-8">
 
 <meta name="viewport"
-content="width=device-width, initial-scale=1.0">
+      content="width=device-width, initial-scale=1.0">
 
 <title>Stock QR Scanner</title>
 
-<!--
-  SPEED V2:
-  เปิดการเชื่อมต่อไปยัง server ของ Apps Script ล่วงหน้า
-  ตอนส่ง VIN กลับไปจะได้ไม่ต้องรอเชื่อมต่อใหม่
--->
-<link rel="preconnect" href="https://script.google.com">
-<link rel="preconnect" href="https://script.googleusercontent.com">
-<link rel="dns-prefetch" href="https://script.google.com">
 
-<!-- QR Scanner Library -->
+<!-- =======================================================
+     CONNECTION PRELOAD
+     ======================================================= -->
+
+<link rel="preconnect"
+      href="https://script.google.com">
+
+<link rel="preconnect"
+      href="https://script.googleusercontent.com">
+
+<link rel="dns-prefetch"
+      href="https://script.google.com">
+
+
+<!-- =======================================================
+     QR SCANNER LIBRARY
+     
+     ใช้ html5-qrcode โดยตรง
+     ไม่ใช้ BarcodeDetector ในขั้นตอนนี้
+     ======================================================= -->
+
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
 
 <style>
 
@@ -28,7 +41,9 @@ content="width=device-width, initial-scale=1.0">
   box-sizing: border-box;
 }
 
+
 body {
+
   margin: 0;
 
   font-family:
@@ -44,7 +59,9 @@ body {
   color: #16233f;
 }
 
+
 .container {
+
   max-width: 480px;
 
   min-height: 100vh;
@@ -54,25 +71,27 @@ body {
   padding: 24px 16px;
 }
 
-h1 {
-  text-align: center;
 
-  margin: 10px 0 20px;
-
-  font-size: 24px;
-}
+/* =======================================================
+   BACK BUTTON
+   ======================================================= */
 
 .back-btn {
+
   display: flex;
+
   align-items: center;
+
   gap: 6px;
 
   border: none;
+
   background: transparent;
 
   color: #2f6fed;
 
   font-size: 16px;
+
   font-weight: 600;
 
   padding: 6px 0;
@@ -80,27 +99,65 @@ h1 {
   cursor: pointer;
 }
 
+
 .back-btn:active {
+
   opacity: 0.6;
 }
 
+
+/* =======================================================
+   TITLE
+   ======================================================= */
+
+h1 {
+
+  text-align: center;
+
+  margin: 10px 0 20px;
+
+  font-size: 24px;
+}
+
+
+/* =======================================================
+   SCANNER
+   ======================================================= */
+
 .scanner {
+
   background: #000;
 
   border-radius: 16px;
 
   overflow: hidden;
-}
 
-#reader {
   width: 100%;
 }
 
-#reader video {
-  width: 100% !important;
+
+#reader {
+
+  width: 100%;
 }
 
+
+#reader video {
+
+  width: 100% !important;
+
+  height: auto !important;
+
+  display: block;
+}
+
+
+/* =======================================================
+   STATUS
+   ======================================================= */
+
 .status {
+
   margin-top: 15px;
 
   text-align: center;
@@ -112,7 +169,13 @@ h1 {
   min-height: 22px;
 }
 
+
+/* =======================================================
+   RESULT
+   ======================================================= */
+
 .result {
+
   margin-top: 20px;
 
   background: #fff;
@@ -122,15 +185,22 @@ h1 {
   padding: 18px;
 
   text-align: center;
+
+  box-shadow:
+    0 2px 10px rgba(0,0,0,0.05);
 }
 
+
 .result-title {
+
   font-size: 14px;
 
   color: #66738f;
 }
 
+
 .vin {
+
   margin-top: 8px;
 
   font-size: 20px;
@@ -138,6 +208,88 @@ h1 {
   font-weight: 700;
 
   word-break: break-all;
+
+  line-height: 1.4;
+}
+
+
+/* =======================================================
+   DEBUG RESULT
+   ======================================================= */
+
+.debug {
+
+  margin-top: 15px;
+
+  background: #16233f;
+
+  color: #ffffff;
+
+  border-radius: 12px;
+
+  padding: 14px;
+
+  text-align: left;
+
+  font-size: 12px;
+
+  line-height: 1.5;
+
+  word-break: break-all;
+
+  display: none;
+}
+
+
+.debug-title {
+
+  font-weight: 700;
+
+  margin-bottom: 6px;
+
+  color: #9fb7ff;
+}
+
+
+.debug-value {
+
+  color: #ffffff;
+}
+
+
+/* =======================================================
+   RETRY BUTTON
+   ======================================================= */
+
+.retry-btn {
+
+  display: none;
+
+  width: 100%;
+
+  margin-top: 15px;
+
+  padding: 12px;
+
+  border: none;
+
+  border-radius: 12px;
+
+  background: #2f6fed;
+
+  color: #fff;
+
+  font-size: 15px;
+
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+
+.retry-btn:active {
+
+  opacity: 0.8;
 }
 
 </style>
@@ -147,16 +299,38 @@ h1 {
 
 <body>
 
+
 <div class="container">
+
+
+  <!-- =====================================================
+       BACK
+       ===================================================== -->
 
   <button
     type="button"
     class="back-btn"
     id="btnBack">
+
     ← กลับ
+
   </button>
 
-  <h1>Scan QR</h1>
+
+  <!-- =====================================================
+       TITLE
+       ===================================================== -->
+
+  <h1>
+
+    Scan QR
+
+  </h1>
+
+
+  <!-- =====================================================
+       CAMERA
+       ===================================================== -->
 
   <div class="scanner">
 
@@ -164,53 +338,126 @@ h1 {
 
   </div>
 
-  <div class="status" id="status">
+
+  <!-- =====================================================
+       STATUS
+       ===================================================== -->
+
+  <div
+    class="status"
+    id="status">
 
     กำลังเตรียมกล้อง...
 
   </div>
 
+
+  <!-- =====================================================
+       RESULT
+       ===================================================== -->
+
   <div class="result">
+
 
     <div class="result-title">
 
-      VIN ที่อ่านได้
+      QR ที่อ่านได้
 
     </div>
 
-    <div class="vin" id="vin">
+
+    <div
+      class="vin"
+      id="vin">
 
       -
 
     </div>
 
+
   </div>
 
+
+  <!-- =====================================================
+       DEBUG
+       ===================================================== -->
+
+  <div
+    class="debug"
+    id="debug">
+
+
+    <div class="debug-title">
+
+      QR ORIGINAL DATA
+
+    </div>
+
+
+    <div
+      class="debug-value"
+      id="debugValue">
+
+      -
+
+    </div>
+
+
+  </div>
+
+
+  <!-- =====================================================
+       RETRY
+       ===================================================== -->
+
+  <button
+    type="button"
+    class="retry-btn"
+    id="btnRetry">
+
+    Scan อีกครั้ง
+
+  </button>
+
+
 </div>
+
 
 
 <script>
 
 /*
  * =========================================================
- * Stock QR Scanner — SPEED V2
+ * STOCK QR SCANNER
+ * DEBUG VERSION
  * =========================================================
  *
- * สิ่งที่ปรับให้เร็วขึ้น:
+ * จุดประสงค์ของ Version นี้:
  *
- * 1. อ่านเฉพาะ QR Code (เดิมไลบรารีลองถอดทุกชนิดบาร์โค้ด
- *    ~15 แบบในทุกเฟรม ทำให้อ่านช้ามาก)
- * 2. ใช้ตัวอ่าน QR ที่มากับเบราว์เซอร์ (BarcodeDetector)
- *    ถ้าเครื่องรองรับ — เร็วกว่ามากบน Android/Chrome
- * 3. สแกน 20 ครั้ง/วินาที (เดิม 10) และไม่สแกนภาพกลับด้าน
- * 4. กรอบสแกนปรับตามขนาดจอ + ขอกล้องความละเอียดสูง
- *    และโฟกัสอัตโนมัติต่อเนื่อง (อ่าน QR เล็ก/ไกลได้ดีขึ้น)
- * 5. อ่านได้แล้วส่งกลับแอปทันที (เดิมรอ 0.5 วินาที)
- * 6. เปิดกล้องทันทีที่หน้าพร้อม ไม่ต้องรอรูป/ฟอนต์โหลดครบ
+ * 1. ทดสอบว่า html5-qrcode สามารถอ่าน QR
+ *    บน Picking Slip ได้หรือไม่
  *
- * ลิงก์ที่ส่งกลับแอปยังเหมือนเดิม:
- *   .../exec?vin=XXXXXXXXXXXXXXXXX
- *   .../exec?screen=scan   (ปุ่มกลับ)
+ * 2. ไม่ใช้ BarcodeDetector
+ *
+ * 3. ไม่ extract VIN
+ *
+ * 4. ไม่ redirect ทันทีหลัง Scan
+ *
+ * 5. แสดง decodedText จริงของ QR
+ *
+ * Flow:
+ *
+ * Camera
+ *   ↓
+ * html5-qrcode
+ *   ↓
+ * QR Code
+ *   ↓
+ * decodedText
+ *   ↓
+ * แสดงบนหน้าจอ
+ *
+ * =========================================================
  */
 
 
@@ -220,26 +467,79 @@ h1 {
  * =========================================================
  */
 
-const params = new URLSearchParams(window.location.search);
+const params =
+  new URLSearchParams(
+    window.location.search
+  );
+
+
+/*
+ * URL สำหรับกลับไป Stock Checking App
+ */
 
 const APP_URL =
   params.get('returnUrl') ||
   'https://script.google.com/a/macros/tripetch-isuzu.co.th/s/AKfycbyPUawbWLA-U63oO6ifxn42rkfdgePQaOj6oYJwz_jKApQMjqTHdG4_HNkVKwus0xE_DQ/exec';
 
+
+/*
+ * Scanner Object
+ */
+
 let scanner = null;
+
+
+/*
+ * ป้องกัน Scan ซ้ำ
+ */
 
 let scanCompleted = false;
 
-const statusEl = document.getElementById("status");
-const vinEl = document.getElementById("vin");
 
+/*
+ * =========================================================
+ * DOM ELEMENTS
+ * =========================================================
+ */
+
+const statusEl =
+  document.getElementById("status");
+
+
+const vinEl =
+  document.getElementById("vin");
+
+
+const debugEl =
+  document.getElementById("debug");
+
+
+const debugValueEl =
+  document.getElementById("debugValue");
+
+
+const retryBtn =
+  document.getElementById("btnRetry");
+
+
+/*
+ * =========================================================
+ * BUILD APP URL
+ * =========================================================
+ */
 
 function buildAppUrl(extraParam) {
 
   const separator =
-    APP_URL.includes('?') ? '&' : '?';
+    APP_URL.includes("?")
+      ? "&"
+      : "?";
 
-  return APP_URL + separator + extraParam;
+  return (
+    APP_URL +
+    separator +
+    extraParam
+  );
 }
 
 
@@ -247,240 +547,486 @@ function buildAppUrl(extraParam) {
  * =========================================================
  * BACK TO STOCK CHECKING APP
  * =========================================================
- *
- * ไม่ต้องรอปิดกล้องให้เสร็จก่อน —
- * เมื่อเปลี่ยนหน้า เบราว์เซอร์จะปิดกล้องให้เอง
  */
 
-document.getElementById("btnBack").addEventListener(
+document
+  .getElementById("btnBack")
+  .addEventListener(
+    "click",
+    function() {
+
+      try {
+
+        if (scanner) {
+
+          scanner
+            .stop()
+            .catch(function() {});
+
+        }
+
+      } catch (e) {
+
+        console.error(e);
+
+      }
+
+
+      window.location.replace(
+        buildAppUrl("screen=scan")
+      );
+
+    }
+  );
+
+
+/*
+ * =========================================================
+ * ON QR SCAN SUCCESS
+ * =========================================================
+ *
+ * สำคัญ:
+ *
+ * เราจะยังไม่ extract VIN
+ * และยังไม่ redirect
+ *
+ * ต้องการเห็น decodedText จริงก่อน
+ * =========================================================
+ */
+
+function onScanSuccess(
+  decodedText,
+  decodedResult
+) {
+
+
+  /*
+   * ป้องกัน QR เดิมถูกอ่านซ้ำ
+   */
+
+  if (scanCompleted) {
+
+    return;
+
+  }
+
+
+  scanCompleted = true;
+
+
+  /*
+   * =======================================================
+   * LOG
+   * =======================================================
+   */
+
+  console.log(
+    "===================================="
+  );
+
+  console.log(
+    "QR FOUND"
+  );
+
+  console.log(
+    "QR ORIGINAL:",
+    decodedText
+  );
+
+  console.log(
+    "QR RESULT:",
+    decodedResult
+  );
+
+  console.log(
+    "===================================="
+  );
+
+
+  /*
+   * =======================================================
+   * DISPLAY RESULT
+   * =======================================================
+   */
+
+  vinEl.textContent =
+    decodedText;
+
+
+  debugValueEl.textContent =
+    decodedText;
+
+
+  debugEl.style.display =
+    "block";
+
+
+  statusEl.textContent =
+    "อ่าน QR สำเร็จ";
+
+
+  /*
+   * =======================================================
+   * VIBRATION
+   * =======================================================
+   */
+
+  try {
+
+    if (navigator.vibrate) {
+
+      navigator.vibrate(60);
+
+    }
+
+  } catch (e) {}
+
+
+  /*
+   * =======================================================
+   * STOP CAMERA
+   * =======================================================
+   */
+
+  try {
+
+    if (scanner) {
+
+      scanner
+        .stop()
+        .catch(function() {});
+
+    }
+
+  } catch (e) {
+
+    console.error(e);
+
+  }
+
+
+  /*
+   * แสดงปุ่ม Scan อีกครั้ง
+   */
+
+  retryBtn.style.display =
+    "block";
+
+}
+
+
+/*
+ * =========================================================
+ * ON QR SCAN FAILURE
+ * =========================================================
+ *
+ * ไม่ต้องทำอะไร
+ *
+ * เพราะ html5-qrcode จะเรียก function นี้
+ * ทุกครั้งที่ frame นั้นยังอ่าน QR ไม่ได้
+ * =========================================================
+ */
+
+function onScanFailure(errorMessage) {
+
+  // ไม่ต้องแสดง error
+  // เพราะจะเกิดขึ้นหลายครั้งต่อวินาที
+
+}
+
+
+/*
+ * =========================================================
+ * START SCANNER
+ * =========================================================
+ */
+
+function startScanner() {
+
+
+  /*
+   * Reset State
+   */
+
+  scanCompleted = false;
+
+
+  vinEl.textContent =
+    "-";
+
+
+  debugEl.style.display =
+    "none";
+
+
+  debugValueEl.textContent =
+    "-";
+
+
+  retryBtn.style.display =
+    "none";
+
+
+  statusEl.textContent =
+    "กำลังเปิดกล้อง...";
+
+
+  /*
+   * =======================================================
+   * CHECK LIBRARY
+   * =======================================================
+   */
+
+  if (
+    typeof Html5Qrcode ===
+    "undefined"
+  ) {
+
+    statusEl.textContent =
+      "โหลดตัวสแกนไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ต";
+
+    return;
+
+  }
+
+
+  /*
+   * =======================================================
+   * CREATE SCANNER
+   * =======================================================
+   *
+   * สำคัญ:
+   *
+   * ไม่ใช้ BarcodeDetector
+   * ไม่ใช้ experimentalFeatures
+   *
+   * ใช้ QR_CODE โดยตรง
+   * =======================================================
+   */
+
+  scanner =
+    new Html5Qrcode(
+      "reader",
+      {
+
+        formatsToSupport: [
+
+          Html5QrcodeSupportedFormats.QR_CODE
+
+        ],
+
+        verbose: false
+
+      }
+    );
+
+
+  /*
+   * =======================================================
+   * SCANNER CONFIG
+   * =======================================================
+   */
+
+  const config = {
+
+    /*
+     * 10 FPS
+     *
+     * ในขั้น Debug ไม่จำเป็นต้องเร่งเป็น 20
+     */
+
+    fps: 10,
+
+
+    /*
+     * QR BOX
+     *
+     * ใช้ 80% ของด้านที่สั้นกว่า
+     */
+
+    qrbox:
+      function(
+        viewfinderWidth,
+        viewfinderHeight
+      ) {
+
+
+        const size =
+          Math.floor(
+
+            Math.min(
+              viewfinderWidth,
+              viewfinderHeight
+            ) * 0.80
+
+          );
+
+
+        return {
+
+          width:
+            Math.max(
+              size,
+              220
+            ),
+
+          height:
+            Math.max(
+              size,
+              220
+            )
+
+        };
+
+      },
+
+
+    /*
+     * เปิด Flip ไว้
+     *
+     * เพื่อไม่จำกัด decoder
+     * ในช่วงทดสอบ
+     */
+
+    disableFlip: false
+
+  };
+
+
+  /*
+   * =======================================================
+   * START CAMERA
+   * =======================================================
+   */
+
+  scanner
+    .start(
+
+      {
+        facingMode:
+          "environment"
+      },
+
+      config,
+
+      onScanSuccess,
+
+      onScanFailure
+
+    )
+
+
+    /*
+     * =====================================================
+     * CAMERA READY
+     * =====================================================
+     */
+
+    .then(
+      function() {
+
+        statusEl.textContent =
+          "กล้องพร้อมใช้งาน — เล็งไปที่ QR";
+
+      }
+    )
+
+
+    /*
+     * =====================================================
+     * CAMERA ERROR
+     * =====================================================
+     */
+
+    .catch(
+      function(error) {
+
+        console.error(
+          "Camera start failed:",
+          error
+        );
+
+
+        statusEl.textContent =
+          "เปิดกล้องไม่สำเร็จ — ตรวจสอบสิทธิ์การใช้กล้อง";
+
+
+      }
+    );
+
+}
+
+
+/*
+ * =========================================================
+ * RETRY BUTTON
+ * =========================================================
+ */
+
+retryBtn.addEventListener(
   "click",
   function() {
 
+
+    /*
+     * ถ้ามี scanner เก่า
+     * พยายาม clear ก่อน
+     */
+
     try {
-      if (scanner) scanner.stop().catch(function() {});
+
+      if (scanner) {
+
+        scanner
+          .clear()
+          .catch(function() {});
+
+      }
+
     } catch (e) {}
 
-    window.location.replace(
-      buildAppUrl('screen=scan')
+
+    /*
+     * เริ่ม Scanner ใหม่
+     */
+
+    setTimeout(
+      function() {
+
+        startScanner();
+
+      },
+      200
     );
+
   }
 );
 
 
 /*
  * =========================================================
- * VIN CLEAN / EXTRACT
- * =========================================================
- *
- * QR บางอันอาจไม่ได้ส่งมาเป็น VIN เพียว ๆ
- *
- * ตัวอย่าง:
- *   MP1FRR90HRT000259
- *   MP1 FRR90HRT000259
- *   VIN: MP1FRR90HRT000259
- *   https://xxxxx/MP1FRR90HRT000259
- *
- * Function นี้จะพยายามดึง VIN 17 ตัวออกมา
+ * START WHEN PAGE READY
  * =========================================================
  */
 
-function extractVin(text) {
+if (
+  document.readyState ===
+  "loading"
+) {
 
-  const raw =
-    String(text || '')
-      .toUpperCase()
-      .trim();
-
-  // ลบ whitespace ทุกตำแหน่ง
-  const cleaned =
-    raw.replace(/\s+/g, '');
-
-  // VIN ปกติ 17 ตัว และไม่ใช้ I, O, Q
-  if (/^[A-HJ-NPR-Z0-9]{17}$/.test(cleaned)) {
-    return cleaned;
-  }
-
-  // ถ้ามีข้อความอื่นปนมา ให้หา VIN 17 ตัวข้างใน
-  const match =
-    raw.match(/[A-HJ-NPR-Z0-9]{17}/);
-
-  if (match) {
-    return match[0];
-  }
-
-  // หา VIN 17 ตัวไม่ได้ → ส่งค่าที่ clean แล้วกลับไป
-  return cleaned;
-}
-
-
-/*
- * =========================================================
- * ON QR READ
- * =========================================================
- */
-
-function onScanSuccess(decodedText) {
-
-  // ป้องกัน QR เดิมถูกอ่านซ้ำหลายครั้ง
-  if (scanCompleted) {
-    return;
-  }
-
-  scanCompleted = true;
-
-  const vin =
-    extractVin(decodedText);
-
-  const targetUrl =
-    buildAppUrl('vin=' + encodeURIComponent(vin));
-
-  // แสดงผลและสั่นเบา ๆ ให้รู้ว่าอ่านได้แล้ว
-  vinEl.textContent = vin;
-  statusEl.textContent = "อ่าน QR สำเร็จ — กำลังเปิดข้อมูลรถ...";
-
-  try {
-    if (navigator.vibrate) navigator.vibrate(60);
-  } catch (e) {}
-
-  console.log("QR ORIGINAL:", decodedText, "| VIN:", vin, "| URL:", targetUrl);
-
-  // ปิดกล้องแบบไม่ต้องรอ แล้วไปแอปทันที
-  // (replace = กดย้อนกลับในเบราว์เซอร์จะไม่วนกลับมาหน้ากล้องที่อ่านเสร็จแล้ว)
-  try {
-    if (scanner) scanner.stop().catch(function() {});
-  } catch (e) {}
-
-  window.location.replace(targetUrl);
-}
-
-
-/*
- * =========================================================
- * START CAMERA
- * =========================================================
- */
-
-function startScanner() {
-
-  if (typeof Html5Qrcode === 'undefined') {
-    statusEl.textContent =
-      "โหลดตัวสแกนไม่สำเร็จ";
-    return;
-  }
-
-  scanner = new Html5Qrcode(
-    "reader",
-    {
-      formatsToSupport: [
-        Html5QrcodeSupportedFormats.QR_CODE
-      ],
-      verbose: false
-    }
+  document.addEventListener(
+    "DOMContentLoaded",
+    startScanner
   );
 
-  const config = {
-    fps: 10,
-
-    qrbox: function(
-      viewfinderWidth,
-      viewfinderHeight
-    ) {
-
-      const size = Math.floor(
-        Math.min(
-          viewfinderWidth,
-          viewfinderHeight
-        ) * 0.80
-      );
-
-      return {
-        width: size,
-        height: size
-      };
-    },
-
-    disableFlip: false
-  };
-
-  scanner
-    .start(
-      { facingMode: "environment" },
-      config,
-      onScanSuccess,
-      function(errorMessage) {
-        // ไม่ต้องทำอะไร
-      }
-    )
-    .then(function() {
-
-      statusEl.textContent =
-        "กล้องพร้อมใช้งาน — เล็งไปที่ QR";
-
-    })
-    .catch(function(error) {
-
-      console.error(
-        "Camera start failed:",
-        error
-      );
-
-      statusEl.textContent =
-        "เปิดกล้องไม่สำเร็จ";
-    });
-}
-
-
-/*
- * เปิดกล้องแบบพื้นฐาน (ใช้เมื่อเครื่องไม่รองรับค่าที่ขอด้านบน)
- */
-function startScannerBasic() {
-
-  const basicConfig = {
-    fps: 20,
-    qrbox: { width: 250, height: 250 },
-    disableFlip: true
-  };
-
-  try {
-
-    scanner
-      .start(
-        { facingMode: "environment" },
-        basicConfig,
-        onScanSuccess,
-        function() {}
-      )
-      .then(function() {
-        statusEl.textContent = "กล้องพร้อมใช้งาน — เล็งไปที่ QR";
-      })
-      .catch(function(error) {
-        console.error("Camera start failed (basic):", error);
-        statusEl.textContent = "เปิดกล้องไม่สำเร็จ — ตรวจสอบสิทธิ์การใช้กล้องของเบราว์เซอร์";
-      });
-
-  } catch (e) {
-    console.error(e);
-    statusEl.textContent = "เปิดกล้องไม่สำเร็จ";
-  }
-}
-
-
-/*
- * =========================================================
- * START AS SOON AS THE PAGE IS READY
- * =========================================================
- *
- * เดิมรอ "load" (ต้องโหลดทุกอย่างครบ)
- * ตอนนี้เริ่มทันทีเมื่อ HTML พร้อม
- */
-
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", startScanner);
 } else {
+
   startScanner();
+
 }
 
 </script>
+
 
 </body>
 
