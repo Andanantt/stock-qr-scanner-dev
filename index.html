@@ -19,6 +19,9 @@
     Android ใช้ตัวอ่านในตัวของ Chrome (BarcodeDetector) ก่อน
   - อ่านเฉพาะในกรอบกลางจอที่ความละเอียดเต็ม (ไม่ย่อภาพ)
 
+  V5: เปิดเป็นแท็บใหม่จากแอป (mode=popup) → ส่ง VIN กลับทาง postMessage
+      แล้วปิดแท็บ แอปไม่ต้องโหลดใหม่ · ถ้าไม่ได้ จะกลับแบบเดิม (?vin=...)
+
   V4 (เร็วขึ้น):
   - สลับอ่านภาพเล็ก (เร็วมาก) กับภาพละเอียด (QR ไกล) ทีละเฟรม
   - อ่านทันทีที่กล้องส่งเฟรมใหม่ ไม่หน่วง 40 ms
@@ -360,6 +363,12 @@ function extractVin(text) {
 
 $('btnBack').addEventListener('click', function () {
   stopCamera();
+  // เปิดมาเป็นแท็บใหม่ → ปิดแท็บ กลับไปแอปที่เปิดค้างอยู่
+  if (params.get('mode') === 'popup' && window.opener && !window.opener.closed) {
+    try { window.close(); } catch (e) {}
+    setTimeout(() => window.location.replace(buildAppUrl('screen=scan')), 300);
+    return;
+  }
   window.location.replace(buildAppUrl('screen=scan'));
 });
 
@@ -540,7 +549,58 @@ function onScanSuccess(decodedText) {
   console.log('QR:', decodedText, '| VIN:', vin);
 
   stopCamera();
+
+  // Scanner Popup V1: เปิดมาจากแอปเป็นแท็บใหม่ → ส่ง VIN กลับทาง postMessage
+  // แอปไม่ต้องโหลดหน้าใหม่ เร็วกว่ามาก
+  if (IS_POPUP && window.opener && !window.opener.closed) {
+    sendVinToOpener(vin, targetUrl);
+    return;
+  }
+
   window.location.replace(targetUrl);
+}
+
+
+/* =========================================================
+ * POPUP MODE — ส่ง VIN กลับไปที่แท็บแอปที่เปิดค้างไว้
+ * ถ้าแอปไม่ตอบรับภายใน 1.2 วินาที → กลับแบบเดิม (?vin=...)
+ * ========================================================= */
+
+const IS_POPUP = params.get('mode') === 'popup';
+
+function sendVinToOpener(vin, fallbackUrl) {
+
+  const id = Date.now() + '-' + Math.random().toString(36).slice(2);
+  let acked = false;
+
+  function onAck(ev) {
+    const d = ev.data || {};
+    if (d.type === 'stockScanAck' && d.id === id) {
+      acked = true;
+      window.removeEventListener('message', onAck);
+      setStatus('ส่ง VIN กลับแอปแล้ว — กำลังปิดหน้านี้...');
+      try { window.close(); } catch (e) {}
+      // บางเบราว์เซอร์ไม่ยอมปิดแท็บเอง
+      setTimeout(() => {
+        setStatus('ส่ง VIN กลับแอปแล้ว — สลับกลับไปที่แท็บแอปได้เลย');
+      }, 400);
+    }
+  }
+
+  window.addEventListener('message', onAck);
+
+  // ไม่รู้ origin ที่แน่นอนของหน้าแอป (googleusercontent) จึงใช้ '*'
+  // ข้อความมีแค่ VIN ไม่มีข้อมูลลับ และฝั่งแอปตรวจ origin ของผู้ส่งอีกชั้น
+  try {
+    window.opener.postMessage({ type: 'stockScanVin', vin: vin, id: id }, '*');
+  } catch (e) {}
+
+  setTimeout(() => {
+    if (!acked) {
+      window.removeEventListener('message', onAck);
+      window.location.replace(fallbackUrl);
+    }
+  }, 1200);
 }
 
 
