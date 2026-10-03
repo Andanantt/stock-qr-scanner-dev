@@ -27,9 +27,6 @@
 
 <!-- =======================================================
      QR SCANNER LIBRARY
-     
-     ใช้ html5-qrcode โดยตรง
-     ไม่ใช้ BarcodeDetector ในขั้นตอนนี้
      ======================================================= -->
 
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -429,33 +426,18 @@ h1 {
 /*
  * =========================================================
  * STOCK QR SCANNER
- * DEBUG VERSION
  * =========================================================
  *
- * จุดประสงค์ของ Version นี้:
+ * Version:
+ * QR BOX TEST
  *
- * 1. ทดสอบว่า html5-qrcode สามารถอ่าน QR
- *    บน Picking Slip ได้หรือไม่
+ * จุดประสงค์:
  *
- * 2. ไม่ใช้ BarcodeDetector
+ * ทดสอบ QR จริงบน Picking Slip
  *
- * 3. ไม่ extract VIN
+ * โดยใช้ html5-qrcode โดยตรง
  *
- * 4. ไม่ redirect ทันทีหลัง Scan
- *
- * 5. แสดง decodedText จริงของ QR
- *
- * Flow:
- *
- * Camera
- *   ↓
- * html5-qrcode
- *   ↓
- * QR Code
- *   ↓
- * decodedText
- *   ↓
- * แสดงบนหน้าจอ
+ * ไม่ใช้ BarcodeDetector
  *
  * =========================================================
  */
@@ -585,12 +567,10 @@ document
  * ON QR SCAN SUCCESS
  * =========================================================
  *
- * สำคัญ:
+ * ตอนนี้ยังไม่ redirect
  *
- * เราจะยังไม่ extract VIN
- * และยังไม่ redirect
+ * ต้องการดู decodedText จริงก่อน
  *
- * ต้องการเห็น decodedText จริงก่อน
  * =========================================================
  */
 
@@ -719,18 +699,16 @@ function onScanSuccess(
  * =========================================================
  * ON QR SCAN FAILURE
  * =========================================================
- *
- * ไม่ต้องทำอะไร
- *
- * เพราะ html5-qrcode จะเรียก function นี้
- * ทุกครั้งที่ frame นั้นยังอ่าน QR ไม่ได้
- * =========================================================
  */
 
 function onScanFailure(errorMessage) {
 
-  // ไม่ต้องแสดง error
-  // เพราะจะเกิดขึ้นหลายครั้งต่อวินาที
+  /*
+   * ไม่ต้องแสดงอะไร
+   *
+   * Function นี้จะถูกเรียกบ่อยมาก
+   * ในขณะที่ยังอ่าน QR ไม่ได้
+   */
 
 }
 
@@ -795,12 +773,12 @@ function startScanner() {
    * CREATE SCANNER
    * =======================================================
    *
-   * สำคัญ:
+   * ใช้เฉพาะ QR_CODE
    *
    * ไม่ใช้ BarcodeDetector
+   *
    * ไม่ใช้ experimentalFeatures
    *
-   * ใช้ QR_CODE โดยตรง
    * =======================================================
    */
 
@@ -825,67 +803,44 @@ function startScanner() {
    * =======================================================
    * SCANNER CONFIG
    * =======================================================
+   *
+   * จุดที่ปรับจาก Version ก่อน:
+   *
+   * qrbox จาก 80% ของจอ
+   *
+   * เปลี่ยนเป็น 200 x 200 px
+   *
+   * เพื่อทดสอบการอ่าน QR จริงบน Picking Slip
+   *
+   * =======================================================
    */
 
   const config = {
 
     /*
-     * 10 FPS
-     *
-     * ในขั้น Debug ไม่จำเป็นต้องเร่งเป็น 20
+     * Scan 10 frames / second
      */
 
     fps: 10,
 
 
     /*
-     * QR BOX
+     * QR SCAN AREA
      *
-     * ใช้ 80% ของด้านที่สั้นกว่า
+     * ใช้พื้นที่ 200 x 200 px
      */
 
-    qrbox:
-      function(
-        viewfinderWidth,
-        viewfinderHeight
-      ) {
+    qrbox: {
 
+      width: 200,
 
-        const size =
-          Math.floor(
+      height: 200
 
-            Math.min(
-              viewfinderWidth,
-              viewfinderHeight
-            ) * 0.80
-
-          );
-
-
-        return {
-
-          width:
-            Math.max(
-              size,
-              220
-            ),
-
-          height:
-            Math.max(
-              size,
-              220
-            )
-
-        };
-
-      },
+    },
 
 
     /*
      * เปิด Flip ไว้
-     *
-     * เพื่อไม่จำกัด decoder
-     * ในช่วงทดสอบ
      */
 
     disableFlip: false
@@ -950,7 +905,6 @@ function startScanner() {
         statusEl.textContent =
           "เปิดกล้องไม่สำเร็จ — ตรวจสอบสิทธิ์การใช้กล้อง";
 
-
       }
     );
 
@@ -969,7 +923,7 @@ retryBtn.addEventListener(
 
 
     /*
-     * ถ้ามี scanner เก่า
+     * ถ้ามี Scanner เดิม
      * พยายาม clear ก่อน
      */
 
@@ -983,7 +937,11 @@ retryBtn.addEventListener(
 
       }
 
-    } catch (e) {}
+    } catch (e) {
+
+      console.error(e);
+
+    }
 
 
     /*
