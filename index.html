@@ -19,6 +19,12 @@
     Android ใช้ตัวอ่านในตัวของ Chrome (BarcodeDetector) ก่อน
   - อ่านเฉพาะในกรอบกลางจอที่ความละเอียดเต็ม (ไม่ย่อภาพ)
 
+  V4 (เร็วขึ้น):
+  - สลับอ่านภาพเล็ก (เร็วมาก) กับภาพละเอียด (QR ไกล) ทีละเฟรม
+  - อ่านทันทีที่กล้องส่งเฟรมใหม่ ไม่หน่วง 40 ms
+  - เครื่องที่มีซูมจากกล้อง ใช้ภาพ 1080p แทน 4K (เบากว่า 4 เท่า)
+  - มุมซ้ายบนแสดงความละเอียด + เวลาที่ใช้อ่านต่อเฟรม
+
   ลิงก์ที่ส่งกลับแอปยังเหมือนเดิม:
     .../exec?vin=XXXXXXXXXXXXXXXXX
     .../exec?screen=scan   (ปุ่มกลับ)
@@ -407,46 +413,70 @@ const ZXING_OPTIONS = {
 };
 
 // อ่านกรอบกลางภาพ (ความละเอียดเต็ม) หรือทั้งภาพ (ย่อ)
-function grabFrame(region) {
+/*
+ * PERFORMANCE V4 — อ่านจากเร็วไปละเอียด สลับกันทีละเฟรม
+ * เฟรมส่วนใหญ่ใช้ภาพเล็ก (อ่านเร็วมาก) และแทรกภาพความละเอียดเต็มเป็นระยะ
+ * สำหรับ QR ที่เล็กมาก/อยู่ไกล
+ *
+ *   crop    = สัดส่วนกลางภาพที่ตัดมาอ่าน (1 = ทั้งภาพ)
+ *   maxSide = ย่อไม่ให้ใหญ่เกินนี้ (0 = ความละเอียดเต็ม)
+ *   harder  = ให้ ZXing พยายามหนักขึ้น (ช้ากว่า)
+ */
+const DECODE_STEPS = [
+  { crop: 0.40, maxSide: 960,  harder: false },   // QR กลางจอ ภาพเล็ก — เร็วที่สุด
+  { crop: 0.60, maxSide: 1280, harder: false },
+  { crop: 0.40, maxSide: 0,    harder: true  },   // ความละเอียดเต็ม — QR เล็ก/ไกล
+  { crop: 0.40, maxSide: 960,  harder: false },
+  { crop: 1.00, maxSide: 1280, harder: false },   // ทั้งภาพ — QR ไม่อยู่ในกรอบ
+  { crop: 0.60, maxSide: 0,    harder: true  }
+];
+
+function grabFrame(step) {
 
   const vw = video.videoWidth, vh = video.videoHeight;
   if (!vw || !vh) return null;
 
-  let sx = 0, sy = 0, sw = vw, sh = vh, scale = 1;
+  const sw = Math.round(vw * step.crop);
+  const sh = Math.round(vh * step.crop);
+  const sx = Math.round((vw - sw) / 2);
+  const sy = Math.round((vh - sh) / 2);
+  const scale = step.maxSide ? Math.min(1, step.maxSide / Math.max(sw, sh)) : Math.min(1, 1800 / Math.max(sw, sh));
 
-  if (region === 'roi') {
-    sw = Math.round(vw * ROI);
-    sh = Math.round(vh * ROI);
-    sx = Math.round((vw - sw) / 2);
-    sy = Math.round((vh - sh) / 2);
-  } else {
-    scale = Math.min(1, 1600 / Math.max(vw, vh));
-  }
-
-  canvas.width = Math.round(sw * scale);
-  canvas.height = Math.round(sh * scale);
-  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-  return ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const w = Math.round(sw * scale), h = Math.round(sh * scale);
+  if (canvas.width !== w) canvas.width = w;
+  if (canvas.height !== h) canvas.height = h;
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, w, h);
+  return ctx.getImageData(0, 0, w, h);
 }
+
+let decodeMsAvg = 0;
 
 async function decodeOnce() {
 
-  // ทุก 4 รอบ ลองอ่านทั้งภาพด้วย (เผื่อ QR ไม่ได้อยู่ในกรอบ)
-  const region = (frameCount % 4 === 3) ? 'full' : 'roi';
-
-  if (nativeDetector) {
+  // Android/Chrome: ตัวอ่านในตัว อ่านจากวิดีโอโดยตรง เร็วที่สุด
+  if (nativeDetector && frameCount % 3 !== 2) {
     try {
-      const found = await nativeDetector.detect(region === 'full' ? video : grabFrame('roi'));
+      const found = await nativeDetector.detect(video);
       if (found && found.length && found[0].rawValue) return found[0].rawValue;
-    } catch (e) { /* ไปใช้ตัวอ่านถัดไป */ }
-    if (decoder === 'native') return null;
+    } catch (e) { /* ใช้ ZXing ต่อ */ }
+    return null;
   }
 
-  const img = grabFrame(region);
+  if (!decoder || decoder === 'native') return null;
+
+  const step = DECODE_STEPS[frameCount % DECODE_STEPS.length];
+  const img = grabFrame(step);
   if (!img) return null;
 
   if (decoder === 'zxing') {
-    const res = await ZXingWASM.readBarcodes(img, ZXING_OPTIONS);
+    const res = await ZXingWASM.readBarcodes(img, {
+      formats: ['QRCode'],
+      tryHarder: step.harder,
+      tryInvert: false,
+      tryRotate: step.harder,
+      tryDownscale: step.harder,
+      maxNumberOfSymbols: 1
+    });
     const ok = res && res.find(r => r.isValid && r.text);
     return ok ? ok.text : null;
   }
@@ -459,6 +489,12 @@ async function decodeOnce() {
   return null;
 }
 
+function nextFrame(cb) {
+  // รอเฟรมใหม่จากกล้อง (ไม่หน่วงเวลาเปล่า ๆ)
+  if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(() => cb());
+  else loopTimer = setTimeout(cb, 16);
+}
+
 async function scanLoop(id) {
 
   if (id === undefined) id = ++loopId;
@@ -467,16 +503,19 @@ async function scanLoop(id) {
   if (!decoding && video.readyState >= 2) {
     decoding = true;
     frameCount++;
+    const t0 = performance.now();
     try {
       const text = await decodeOnce();
       if (text) { onScanSuccess(text); return; }
     } catch (e) {
       console.warn('decode error:', e);
     }
+    decodeMsAvg = decodeMsAvg ? decodeMsAvg * 0.9 + (performance.now() - t0) * 0.1 : (performance.now() - t0);
+    if (frameCount % 15 === 0) updateBadge();
     decoding = false;
   }
 
-  if (id === loopId) loopTimer = setTimeout(() => scanLoop(id), 40);
+  if (id === loopId) nextFrame(() => scanLoop(id));
 }
 
 
@@ -557,15 +596,19 @@ async function startCamera(deviceId) {
   // ปรับกรอบภาพให้ตรงสัดส่วนกล้องจริง
   $('viewport').style.aspectRatio = video.videoWidth + ' / ' + video.videoHeight;
 
-  const badge = $('resBadge');
-  badge.textContent = video.videoWidth + '×' + video.videoHeight;
-  badge.hidden = false;
-
   await setupCapabilities();
+  updateBadge();
 
   setStatus('กล้องพร้อมใช้งาน — เล็ง QR ให้อยู่ในกรอบ');
 
   scanLoop();
+}
+
+function updateBadge() {
+  const badge = $('resBadge');
+  badge.textContent = video.videoWidth + '×' + video.videoHeight +
+    (decodeMsAvg ? ' · ' + Math.round(decodeMsAvg) + ' ms' : '');
+  badge.hidden = false;
 }
 
 async function setupCapabilities() {
@@ -584,6 +627,15 @@ async function setupCapabilities() {
     const z = Number($(id).dataset.zoom);
     $(id).hidden = !(zoomCaps && z >= zoomCaps.min && z <= zoomCaps.max + 0.01);
   });
+
+  if (zoomCaps && video.videoWidth * video.videoHeight > 1920 * 1080) {
+    // มีซูมจากกล้องแล้ว → ใช้ภาพ 1080p ก็พอ (เบากว่า 4K หลายเท่า อ่านเร็วขึ้น)
+    try {
+      await track.applyConstraints({ width: { ideal: 1920 }, height: { ideal: 1080 } });
+      await new Promise(r => setTimeout(r, 150));
+      $('viewport').style.aspectRatio = video.videoWidth + ' / ' + video.videoHeight;
+    } catch (e) {}
+  }
 
   if (zoomCaps) {
     // เริ่มที่ 2x (QR เล็ก) หรือค่าที่ผู้ใช้เลือกครั้งก่อน
